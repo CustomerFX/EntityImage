@@ -19,4 +19,12 @@ Required Parameters:
 Optional Parameters:
 * **folder**: The subfolder to store the images in under the attachements folder. Unless otherwise specified the subfolder will be "Images". Note, the entity name will be a subfolder under this one. _Note: The images will be stored in the attachments folder. This will be the subfolder in that directory where images will be stored._
 
+The folder where the images will be stored is:
+
+	{AttachmentsPath}\Images\EntityName\
+
+unless a folder parameter is included in the URL:
+
+	{AttachmentsPath}\FolderParameter\EntityName\
+
 For more info, see http://customerfx.com
