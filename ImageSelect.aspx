@@ -30,7 +30,7 @@ Optional Parameters:
 "folder": The subfolder to store the images in under the attachements folder. Unless otherwise specified
 	      the subfolder will be "Images". Note, the entity name will be a subfolder under this one.
 
---!>
+-->
 
 <html>
 
