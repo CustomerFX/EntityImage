@@ -1,4 +1,4 @@
-<%@ WebHandler Language="C#" Class="FileHandler" %>
+<%@ WebHandler Language="C#" Class="ImageHandler" %>
 
 using System;
 using System.Web;
@@ -9,9 +9,9 @@ using System.Data.OleDb;
 using System.Web.SessionState;
 using Sage.Platform.Application;
 
-public class FileHandler : IHttpHandler, IRequiresSessionState
+public class ImageHandler : IHttpHandler, IRequiresSessionState
 {
-    public void ProcessRequest (HttpContext context) 
+    public void ProcessRequest(HttpContext context)
     {
         var fileReq = context.Request.QueryString["file"];
         if (string.IsNullOrEmpty(fileReq))
@@ -19,7 +19,7 @@ public class FileHandler : IHttpHandler, IRequiresSessionState
             ShowMessage("No file parameter passed.", context);
             return;
         }
-        
+
         var filePath = Path.Combine(AttachmentPath, context.Server.UrlDecode(fileReq));
         if (!File.Exists(filePath))
         {
@@ -33,7 +33,7 @@ public class FileHandler : IHttpHandler, IRequiresSessionState
         context.Response.ContentType = GetMimeType(file.Extension);
         context.Response.WriteFile(file.FullName, false);
     }
-    
+
     private void ShowMessage(string message, HttpContext context)
     {
         context.Response.Clear();
@@ -48,7 +48,7 @@ public class FileHandler : IHttpHandler, IRequiresSessionState
             using (var conn = new OleDbConnection(ConnectionString))
             {
                 conn.Open();
-                using (var cmd = new OleDbCommand("select attachmentpath from branchoptions where sitecode = 'NOSYNCSERVER'", conn))
+                using (var cmd = new OleDbCommand("select top 1 attachmentpath from branchoptions where sitecode = (select primaryserver from systeminfo where systeminfoid = 'PRIMARY')", conn))
                 {
                     return cmd.ExecuteScalar().ToString();
                 }
@@ -81,6 +81,6 @@ public class FileHandler : IHttpHandler, IRequiresSessionState
         {".tiff", "image/tiff"},
 		{".bmp", "image/bmp"}
     };
- 
-    public bool IsReusable { get { return false; }}
+
+    public bool IsReusable { get { return false; } }
 }

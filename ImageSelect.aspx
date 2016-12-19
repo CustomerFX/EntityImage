@@ -18,7 +18,7 @@ Set the control's height and width as needed and set the DynamicURL property to 
 Additionally, you can improve the look of this on the deployed form by adding the following to a
 C# Snippet LoadAction (this assumes you've named the control "frameImage"):
 
-	ScriptManager.RegisterClientScriptBlock(this, GetType(), "imageStyle_Script", "$('head').append('<style type=\"text/css\">" + frameImage.ControlID + " div, " + frameImage.ControlID + " div iframe { overflow-x: hidden !important; overflow-y: hidden !important; border: none; }</style>');", true);
+	ScriptManager.RegisterClientScriptBlock(this, GetType(), "imageStyle_Script", "$('head').append('<style type=\"text/css\"> #" + frameImage.ClientID + " div, #" + frameImage.ClientID + " div iframe { overflow-x: hidden !important; overflow-y: hidden !important; border: none; }</style>');", true);
 
 There are two required parameters that must be included in the URL and one optional.
 
@@ -133,12 +133,12 @@ Optional Parameters:
     
     private string ImageFile
     {
-        get { return EntityId + ".png" }
+        get { return EntityId + ".png"; }
     }
 	
 	private string FullImagePath
 	{
-		get { Path.Combine(ImageFolder, ImageFile); }
+		get { return Path.Combine(ImageFolder, ImageFile); }
 	}
 	
 	private bool ImageExists
@@ -162,7 +162,7 @@ Optional Parameters:
 		{
 			var folder = Request.QueryString["folder"];
 			if (string.IsNullOrEmpty(folder)) folder = _DEFAULTFOLDER;
-			if (!string.IsNullOrEmpty(Entity)) folder = folder + "\" + Entity;
+			if (!string.IsNullOrEmpty(Entity)) folder = folder + @"\" + Entity;
 			return folder;
 		}
 	}
@@ -174,7 +174,7 @@ Optional Parameters:
             using (var conn = new OleDbConnection(ConnectionString))
             {
                 conn.Open();
-                using (var cmd = new OleDbCommand("select attachmentpath from branchoptions where sitecode = 'NOSYNCSERVER'", conn))
+                using (var cmd = new OleDbCommand("select top 1 attachmentpath from branchoptions where sitecode = (select primaryserver from systeminfo where systeminfoid = 'PRIMARY')", conn))
                 {
                     return cmd.ExecuteScalar().ToString();
                 }
@@ -217,14 +217,14 @@ Optional Parameters:
         {
             try
             {
-                string filename = Path.Combine(ImageFolder, EntityId + Path.GetExtension(fileUpload.FileName));
-                fileUpload.SaveAs(filename);
+                var fileName = Path.Combine(ImageFolder, EntityId + ".png");
+                var ext = Path.GetExtension(fileUpload.FileName).ToLower().Replace(".", "");
+
+                if (ext != "png" && ext != "jpg" && ext != "gif" && ext != "bmp" && ext != "tiff")
+                    throw new Exception("Please select an image file.");
                 
-				if (Path.GetExtension(filename).ToLower() != "png")
-				{
-					var bitmap = Bitmap.FromFile(filename);
-					bitmap.Save(Path.GetFileName(imagename) + ".png", ImageFormat.Png);
-				}
+                var bitmap = Bitmap.FromStream(fileUpload.PostedFile.InputStream);
+                bitmap.Save(fileName, System.Drawing.Imaging.ImageFormat.Png);
 
                 upload.Visible = false;
                 content.Visible = true;

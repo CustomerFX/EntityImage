@@ -8,7 +8,7 @@ Set the control's height and width as needed and set the DynamicURL property to 
 
 Additionally, you can improve the look of this on the deployed form by adding the following to a C# Snippet LoadAction (this assumes you've named the control "frameImage"):
 
-	ScriptManager.RegisterClientScriptBlock(this, GetType(), "imageStyle_Script", "$('head').append('<style type=\"text/css\">" + frameImage.ControlID + " div, " + frameImage.ControlID + " div iframe { overflow-x: hidden !important; overflow-y: hidden !important; border: none; }</style>');", true);
+	ScriptManager.RegisterClientScriptBlock(this, GetType(), "imageStyle_Script", "$('head').append('<style type=\"text/css\"> #" + frameImage.ClientID + " div, #" + frameImage.ClientID + " div iframe { overflow-x: hidden !important; overflow-y: hidden !important; border: none; }</style>');", true);
 
 There are two required parameters that must be included in the URL and one optional.
 
