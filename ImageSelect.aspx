@@ -45,7 +45,7 @@ Required Parameters:
 If Storing in Database, include Parameters:
 "dataTable": The name of a table to save the image to (such as "Contact")
 "dataField": The field on the table specified above to save the image to (such as "ContactImage" - must be a BLOB field)
-"dataId": The ID of the row the image is for (such as "ContactId")
+"dataId": The ID of the row the image is for (such as "ContactId" - Note: this is the field name, not the ID value)
 (Note: omit these parameters to save image in attachments folder)
 
 Optional Parameters:
