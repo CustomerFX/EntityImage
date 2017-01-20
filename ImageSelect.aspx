@@ -12,8 +12,24 @@ These files must be added to a folder named "EntityImage" in the SlxClient\Suppo
 You can then add this ImageSelect.aspx file to any quickform using the Web Dynamic Content control. 
 Set the control's height and width as needed and set the DynamicURL property to the following (where
 "EntityName" is the name of the entity):
+    
+    NOTE: Replace EntityId and EntityName with the ID and name for the entity
+    
+    TO STORE IMAGE IN ATTACHMENTS FOLDER USE:
+    -----------------------------------------
+	SmartParts/EntityImage/ImageSelect.aspx?entityId=EntityId&entity=EntityName
+    
+    Example (in Load Action for Contact):
+    frameImage.DynamicURL = string.Format("SmartParts/EntityImage/ImageSelect.aspx?entityId={0}&entity=Contact", contact.Id);
+    
 
-	SmartParts/EntityImage/ImageSelect.aspx?entityId=${Id}&entity=EntityName
+    TO STORE IMAGE IN TABLE IN DATABASE USE:
+    ----------------------------------------
+	SmartParts/EntityImage/ImageSelect.aspx?entityId=EntityId&entity=EntityName&DataTable=SomeTable&DataField=SomeField&DataId=SomeIdField
+    
+    Example (in Load Action for Contact to save in CONTACT.CONTACTIMAGE Blob field)
+    frameImage.DynamicURL = string.Format("SmartParts/EntityImage/ImageSelect.aspx?entityId={0}&entity=Contact&DataTable=Contact&DataField=ContactImage&DataId=ContactId", contact.Id);
+    
 
 Additionally, you can improve the look of this on the deployed form by adding the following to a
 C# Snippet LoadAction (this assumes you've named the control "frameImage"):
@@ -25,6 +41,12 @@ There are two required parameters that must be included in the URL and one optio
 Required Parameters:
 "entityId": The ID of the record the image is for
 "entity": The name of the entity for the entityId
+    
+If Storing in Database, include Parameters:
+"dataTable": The name of a table to save the image to (such as "Contact")
+"dataField": The field on the table specified above to save the image to (such as "ContactImage" - must be a BLOB field)
+"dataId": The ID of the row the image is for (such as "ContactId")
+(Note: omit these parameters to save image in attachments folder)
 
 Optional Parameters:
 "folder": The subfolder to store the images in under the attachements folder. Unless otherwise specified
@@ -90,29 +112,34 @@ Optional Parameters:
     public void Page_Load(object sender, EventArgs e)
     {
         fileUpload.Attributes.Add("onchange", "__doPostBack('buttonUpload','')");
-        
-        if (!Page.IsPostBack)
+
+        if (Page.IsPostBack) return;
+
+        if (string.IsNullOrEmpty(EntityId))
         {
-            if (string.IsNullOrEmpty(EntityId))
+            ShowError(string.Format("You must first save the {0}.", Entity));
+            return;
+        }
+
+        if (!IsForFileSystem)
+        {
+            if (!ValidateField(DataTable, DataField) || !ValidateField(DataTable, DataId))
             {
-                upload.Visible = false;
-                content.Visible = false;
-                error.Visible = true;
-                labelMessage.Text = string.Format("You must first save the {0}.", Entity);
+                ShowError("Error validating the database field for images.");
                 return;
             }
-            
-            if (ImageExists)
-            {
-				upload.Visible = false;
-                content.Visible = true;
-                ShowImage();
-            }
-            else
-            {
-                upload.Visible = true;
-                content.Visible = false;
-            }
+        }
+
+        if (ImageExists)
+        {
+            upload.Visible = false;
+            content.Visible = true;
+            ShowImage();
+        }
+        else
+        {
+            upload.Visible = true;
+            content.Visible = false;
         }
     }
 
@@ -120,31 +147,61 @@ Optional Parameters:
     {
         get { return Request.QueryString["entityId"]; }
     }
-	
-	private string Entity
+
+    private string Entity
     {
         get { return Request.QueryString["entity"]; }
     }
-    
+
+    private string DataTable
+    {
+        get { return Request.QueryString["dataTable"]; }
+    }
+
+    private string DataField
+    {
+        get { return Request.QueryString["dataField"]; }
+    }
+
+    private string DataId
+    {
+        get { return Request.QueryString["dataId"]; }
+    }
+
+    private bool IsForFileSystem
+    {
+        get { return (string.IsNullOrEmpty(DataTable) || string.IsNullOrEmpty(DataField) || string.IsNullOrEmpty(DataId)); }
+    }
+
     private string GetImageLink()
     {
-		return (!ImageExists ? "" : string.Format("~/SmartParts/EntityImage/ImageHandler.ashx?file={0}", HttpContext.Current.Server.UrlEncode(ImageSubFolder + "/" + ImageFile)));
+        return (!ImageExists
+            ? string.Empty
+            : IsForFileSystem
+                ? string.Format("~/SmartParts/EntityImage/ImageHandler.ashx?file={0}", HttpContext.Current.Server.UrlEncode(ImageSubFolder + "/" + ImageFile))
+                : string.Format("~/SmartParts/EntityImage/ImageHandler.ashx?dataTable={0}&dataField={1}&dataId={2}&entityId={3}", DataTable, DataField, DataId, EntityId)
+            );
     }
-    
+
     private string ImageFile
     {
         get { return EntityId + ".png"; }
     }
-	
-	private string FullImagePath
-	{
-		get { return Path.Combine(ImageFolder, ImageFile); }
-	}
-	
-	private bool ImageExists
-	{
-		get { return File.Exists(FullImagePath); }
-	}
+
+    private string FullImagePath
+    {
+        get { return Path.Combine(ImageFolder, ImageFile); }
+    }
+
+    private bool ImageExists
+    {
+        get
+        {
+            return (IsForFileSystem
+                ? File.Exists(FullImagePath)
+                : HasDataImage());
+        }
+    }
 
     private string ImageFolder
     {
@@ -155,18 +212,18 @@ Optional Parameters:
             return folder;
         }
     }
-	
-	private string ImageSubFolder
-	{
-		get
-		{
-			var folder = Request.QueryString["folder"];
-			if (string.IsNullOrEmpty(folder)) folder = _DEFAULTFOLDER;
-			if (!string.IsNullOrEmpty(Entity)) folder = folder + @"\" + Entity;
-			return folder;
-		}
-	}
-    
+
+    private string ImageSubFolder
+    {
+        get
+        {
+            var folder = Request.QueryString["folder"];
+            if (string.IsNullOrEmpty(folder)) folder = _DEFAULTFOLDER;
+            if (!string.IsNullOrEmpty(Entity)) folder = folder + @"\" + Entity;
+            return folder;
+        }
+    }
+
     private string AttachmentPath
     {
         get
@@ -182,6 +239,59 @@ Optional Parameters:
         }
     }
 
+    private bool HasDataImage()
+    {
+        using (var conn = new OleDbConnection(ConnectionString))
+        {
+            conn.Open();
+            using (var cmd = new OleDbCommand(string.Format("select {0} from {1} where {2} = ?", DataField, DataTable, DataId), conn))
+            {
+                cmd.Parameters.AddWithValue("@id", EntityId);
+                var data = cmd.ExecuteScalar();
+                return (data != null && data != DBNull.Value);
+            }
+        }
+    }
+
+    private bool HasDataRecord()
+    {
+        using (var conn = new OleDbConnection(ConnectionString))
+        {
+            conn.Open();
+            using (var cmd = new OleDbCommand(string.Format("select count(*) as cnt from {0} where {1} = ?", DataTable, DataId), conn))
+            {
+                cmd.Parameters.AddWithValue("@id", EntityId);
+                return (Convert.ToInt32(cmd.ExecuteScalar()) > 0);
+            }
+        }
+    }
+
+    private bool SaveDataImage(byte[] ImageBytes)
+    {
+        if (!HasDataRecord())
+        {
+            ShowError("Record must first be saved.");
+            return false;
+        }
+
+        using (var conn = new OleDbConnection(ConnectionString))
+        {
+            conn.Open();
+            using (var cmd = new OleDbCommand(string.Format("update {0} set {1} = ? where {2} = ?", DataTable, DataField, DataId), conn))
+            {
+                cmd.Parameters.AddWithValue("@field", ImageBytes);
+                cmd.Parameters.AddWithValue("@id", EntityId);
+                cmd.ExecuteNonQuery();
+            }
+        }
+        return true;
+    }
+
+    private void RemoveDataImage()
+    {
+        SaveDataImage(null);
+    }
+
     private string ConnectionString
     {
         get
@@ -190,7 +300,29 @@ Optional Parameters:
             return dataSvc.GetConnectionString();
         }
     }
-    
+
+    private void ShowError(string Message)
+    {
+        upload.Visible = false;
+        content.Visible = false;
+        error.Visible = true;
+        labelMessage.Text = Message;
+    }
+
+    private bool ValidateField(string Table, string Field)
+    {
+        using (var conn = new OleDbConnection(ConnectionString))
+        {
+            conn.Open();
+            using (var cmd = new OleDbCommand("select count(*) as cnt from sectabledefs where tablename = ? and fieldname = ?", conn))
+            {
+                cmd.Parameters.AddWithValue("@tablename", Table);
+                cmd.Parameters.AddWithValue("@fieldname", Field);
+                return (Convert.ToInt32(cmd.ExecuteScalar()) > 0);
+            }
+        }
+    }
+
     private void ShowImage()
     {
         var image = GetImageLink();
@@ -200,7 +332,7 @@ Optional Parameters:
             content.Visible = false;
             return;
         }
-        
+
         upload.Visible = false;
         content.Visible = true;
 
@@ -212,7 +344,7 @@ Optional Parameters:
     protected void buttonUpload_Click(object sender, EventArgs e)
     {
         error.Visible = false;
-        
+
         if (fileUpload.HasFile)
         {
             try
@@ -222,14 +354,27 @@ Optional Parameters:
 
                 if (ext != "png" && ext != "jpg" && ext != "gif" && ext != "bmp" && ext != "tiff")
                     throw new Exception("Please select an image file.");
-                
-                var bitmap = Bitmap.FromStream(fileUpload.PostedFile.InputStream);
-                bitmap.Save(fileName, System.Drawing.Imaging.ImageFormat.Png);
+
+                if (IsForFileSystem)
+                {
+                    var bitmap = Bitmap.FromStream(fileUpload.PostedFile.InputStream);
+                    bitmap.Save(fileName, System.Drawing.Imaging.ImageFormat.Png);
+                }
+                else
+                {
+                    using (var stream = fileUpload.PostedFile.InputStream)
+                    {
+                        var imageBytes = new byte[(int)stream.Length + 1];
+                        stream.Read(imageBytes, 0, (int)stream.Length);
+                        stream.Close();
+                        if (!SaveDataImage(imageBytes)) return;
+                    }
+                }
 
                 upload.Visible = false;
                 content.Visible = true;
                 ShowImage();
-                
+
             }
             catch (Exception ex)
             {
@@ -246,7 +391,10 @@ Optional Parameters:
     {
         try
         {
-            File.Delete(FullImagePath);
+            if (IsForFileSystem)
+                File.Delete(FullImagePath);
+            else
+                RemoveDataImage();
 
             upload.Visible = true;
             content.Visible = false;
@@ -260,7 +408,7 @@ Optional Parameters:
             labelError.Text = "Error deleting image. " + ex.Message;
         }
     }
-    
+
 </script>
    
 </html>
